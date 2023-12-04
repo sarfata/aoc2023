@@ -1,8 +1,4 @@
-use std::{
-    collections::{HashMap, VecDeque},
-    error::Error,
-    fs::read_to_string,
-};
+use std::{collections::HashMap, fs::read_to_string};
 
 use nom::{
     bytes::complete::tag,
@@ -49,7 +45,6 @@ fn part2(filename: &str) -> Result<u32, Box<dyn std::error::Error>> {
 }
 
 struct Card {
-    id: u32,
     winning: Vec<u32>,
     numbers: Vec<u32>,
 }
@@ -73,7 +68,7 @@ impl Card {
 }
 
 fn parse_line(input: &str) -> IResult<&str, Card> {
-    let (input, id) = preceded(preceded(tag("Card"), space1), digit1)(input)?;
+    let (input, _id) = preceded(preceded(tag("Card"), space1), digit1)(input)?;
     let (input, _) = preceded(tag(":"), space1)(input)?;
     let (input, num_lists) = separated_pair(
         separated_list0(space1, digit1),
@@ -84,7 +79,6 @@ fn parse_line(input: &str) -> IResult<&str, Card> {
     Ok((
         input,
         Card {
-            id: id.parse().unwrap(),
             winning: num_lists.0.iter().map(|s| s.parse().unwrap()).collect(),
             numbers: num_lists.1.iter().map(|s| s.parse().unwrap()).collect(),
         },
@@ -97,17 +91,18 @@ fn parse_file(input: &str) -> IResult<&str, Vec<Card>> {
 
 struct Game {
     cards: HashMap<u32, u32>,
-    scratch_queue: VecDeque<u32>,
+    // Note: I don't think I needed the queue because you are always modifying the counts below you so you can just walk the counts and make the changes.
+    // scratch_queue: VecDeque<u32>,
     counts: Vec<u32>,
 }
 
 impl Game {
     fn new(cards: Vec<Card>) -> Self {
         let mut counts = Vec::with_capacity(cards.len());
-        let mut scratch_queue = VecDeque::with_capacity(cards.len());
-        for i in 0..cards.len() {
+        // let mut scratch_queue = VecDeque::with_capacity(cards.len());
+        for _ in 0..cards.len() {
             counts.push(1);
-            scratch_queue.push_back(i as u32 + 1);
+            // scratch_queue.push_back(i as u32 + 1);
         }
 
         Game {
@@ -116,11 +111,13 @@ impl Game {
                 .enumerate()
                 .map(|(i, c)| (i as u32 + 1, c.count_match()))
                 .collect(),
-            scratch_queue,
+            // scratch_queue,
             counts,
         }
     }
 
+    /*
+    first solution with a queue
     fn scratch(&mut self) -> Result<bool, &'static str> {
         let cardIndex = self.scratch_queue.pop_front().ok_or("nothing to scratch")?;
         let matching_numbers = self.cards.get(&cardIndex).ok_or("no such card")?;
@@ -142,8 +139,21 @@ impl Game {
         Ok(!self.scratch_queue.is_empty())
     }
 
-    fn play(&mut self) -> Result<(), &'static str> {
+    fn play_slow(&mut self) -> Result<(), &'static str> {
         while self.scratch()? {}
+        Ok(())
+    }
+     */
+
+    fn play(&mut self) -> Result<(), &'static str> {
+        for i in 0..self.counts.len() {
+            println!("{i}: {:?}", self.counts);
+            let matching_numbers = *self.cards.get(&(i as u32 + 1)).ok_or("no such card")?;
+
+            for j in i + 1..=i + matching_numbers as usize {
+                self.counts[j] = self.counts[j] + self.counts[i];
+            }
+        }
         Ok(())
     }
 
@@ -166,29 +176,23 @@ mod tests {
                 .1,
         );
 
-        game.scratch().expect("scratch error");
-        assert_eq!(game.counts, [1, 2, 2, 2, 2, 1]);
-        assert_eq!(game.scratch_queue, [2, 3, 4, 5, 6, 2, 3, 4, 5]);
+        // game.scratch().expect("scratch error");
+        // assert_eq!(game.counts, [1, 2, 2, 2, 2, 1]);
+        // assert_eq!(game.scratch_queue, [2, 3, 4, 5, 6, 2, 3, 4, 5]);
         game.play().expect("play error");
-        assert_eq!(game.scratch_queue, []);
+        // assert_eq!(game.scratch_queue, []);
         assert_eq!(game.counts[0..6], [1, 2, 4, 8, 14, 1]);
         assert_eq!(game.count_cards(), 30);
     }
 
     #[rstest]
-    #[case("Card 6: 31 18 13 56 72 | 74 77 10 23 35 67 36 11", 6, &[31, 18, 13, 56, 72], &[74, 77, 10, 23, 35, 67, 36, 11])]
-    #[case("Card 6:  1 18 13 56 72 | 74 77 10 23 35 67 36 11", 6, &[1, 18, 13, 56, 72], &[74, 77, 10, 23, 35, 67, 36, 11])]
-    #[case("Card   6:  1 18  3 56 72 | 74 77 10 23 35 67 36 11", 6, &[1, 18,  3, 56, 72], &[74, 77, 10, 23, 35, 67, 36, 11])]
-    #[case("Card   6:  1 18  3 56 72 |  4 77 10 23 35 67 36 11", 6, &[1, 18,  3, 56, 72], &[4, 77, 10, 23, 35, 67, 36, 11])]
-    fn test_parser(
-        #[case] input: &str,
-        #[case] id: u32,
-        #[case] winning: &[u32],
-        #[case] numbers: &[u32],
-    ) {
+    #[case("Card 6: 31 18 13 56 72 | 74 77 10 23 35 67 36 11", &[31, 18, 13, 56, 72], &[74, 77, 10, 23, 35, 67, 36, 11])]
+    #[case("Card 6:  1 18 13 56 72 | 74 77 10 23 35 67 36 11", &[1, 18, 13, 56, 72], &[74, 77, 10, 23, 35, 67, 36, 11])]
+    #[case("Card   6:  1 18  3 56 72 | 74 77 10 23 35 67 36 11", &[1, 18,  3, 56, 72], &[74, 77, 10, 23, 35, 67, 36, 11])]
+    #[case("Card   6:  1 18  3 56 72 |  4 77 10 23 35 67 36 11", &[1, 18,  3, 56, 72], &[4, 77, 10, 23, 35, 67, 36, 11])]
+    fn test_parser(#[case] input: &str, #[case] winning: &[u32], #[case] numbers: &[u32]) {
         let card = parse_line(input).expect("parse error").1;
 
-        assert_eq!(card.id, id);
         assert_eq!(card.winning, winning);
         assert_eq!(card.numbers, numbers);
     }
@@ -198,7 +202,6 @@ mod tests {
     #[case(&[31, 18, 13, 56, 72], &[74, 77, 10, 23, 35, 67, 36, 11], 0)]
     fn test_count_match(#[case] winning: &[u32], #[case] numbers: &[u32], #[case] matches: u32) {
         let card = Card {
-            id: 0,
             winning: winning.to_owned(),
             numbers: numbers.to_owned(),
         };
@@ -211,7 +214,6 @@ mod tests {
     #[case(&[31, 18, 13, 56, 72], &[74, 77, 10, 23, 35, 67, 36, 11], 0)]
     fn test_points(#[case] winning: &[u32], #[case] numbers: &[u32], #[case] matches: u32) {
         let card = Card {
-            id: 0,
             winning: winning.to_owned(),
             numbers: numbers.to_owned(),
         };
