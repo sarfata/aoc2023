@@ -134,7 +134,6 @@ impl Almanac {
                     })
                     .unwrap();
                 println!("For range {start} -> {end} => lowest = {}", r);
-                println!("For range {start} -> {end} => lowest = {}", r);
                 r
             })
             .fold(u64::MAX, |acc, v| std::cmp::min(acc, v)))
